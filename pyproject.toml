@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "video-frame-exporter"
+version = "2.0.0"
+description = "视频帧序列导出：逐帧输出彩色帧、线稿、关键帧、深度图、蒙版、抠图与底色，可直接导入 C4D"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "zfxzfxzfx852" }]
+keywords = ["video", "frame", "lineart", "depth", "onnx", "c4d", "vfx"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = [
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "onnxruntime>=1.16.0",
+    "Pillow>=10.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+video-frame-exporter = "video_frame_exporter.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["video_frame_exporter*", "app*"]

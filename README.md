@@ -2,12 +2,13 @@
 
 一句话生成短视频，并逐帧导出全套制作素材：彩色帧、透明底黑白线稿、关键帧、MiDaS 单目深度图、U2NetP 主体蒙版与透明抠图、自动大色块底色、接触表、主色卡、GIF 预览、ProRes MOV 与清单文件。全部为连续编号 PNG 序列，可直接导入 Cinema 4D（C4D）做图片序列纹理、2.5D 位移与分层合成。
 
-全程本地运行，无需 GPU，模型通过 ONNX Runtime 在 CPU 上推理。
+提供 **Web 图形界面、REST API、命令行** 三种使用方式，全程本地运行，无需 GPU；模型通过 ONNX Runtime 推理，CPU/GPU 自动切换。
 
 ---
 
 ## 功能特性
 
+- **三种使用方式**：Web 界面（拖拽上传 + 实时进度 + 在线预览）、REST API、命令行
 - 视频生成与分段拼接：支持 4–15 秒分段生成，自动拼接为最长约 90 秒的完整视频
 - 彩色帧序列：ffmpeg 按目标帧率抽帧，PNG 无损、连续编号
 - 黑白线稿：双边滤波 + Canny 边缘，三帧时域投票抑制闪烁，连通域清理与线宽可调，输出透明底 / 白底两个版本
@@ -15,7 +16,9 @@
 - 单目深度图：MiDaS 模型输出相对深度，用于 C4D 位移与 2.5D 视差
 - 主体蒙版与抠图：U2NetP 输出软/硬蒙版，一步生成带透明通道的 BGRA 抠图
 - 自动底色：均值漂移 + KMeans 量化大色块，线稿边缘自动压黑
-- 预览产物：接触表、主色卡、GIF、ProRes 10bit MOV
+- 预览产物：接触表、主色卡、GIF、ProRes 10bit MOV；Web 端内置帧序列播放器与前后对比滑块
+- 参数预设：动漫风 / 写实风 / 纯线稿 / 极速模式 一键切换
+- 多进程帧池：按 CPU 核数并行推理，显著提速
 - 断点续跑：中断后重跑同一命令，已完成产物自动跳过
 - 批量处理：一次传入多个视频，输出独立子目录
 
@@ -23,54 +26,68 @@
 
 ## 快速开始
 
-### 1. 环境要求
+### 方式一：Docker 一键启动（推荐）
 
-- Python 3.10+
-- ffmpeg、ffprobe（需在 PATH 中）
-- 支持 Windows / macOS / Linux
+```bash
+docker compose up -d
+```
 
-### 2. 下载安装
+浏览器打开 `http://localhost:8000` 即可使用 Web 界面，镜像内已包含 ffmpeg 与全部模型。
+
+### 方式二：本地安装
+
+环境要求：Python 3.10+、ffmpeg/ffprobe（需在 PATH 中），支持 Windows / macOS / Linux。
 
 ```bash
 git clone https://github.com/zfxzfxzfx852/video-frame-exporter.git
 cd video-frame-exporter
 pip install -r requirements.txt
+python3 scripts/download_models.py        # 下载模型（约 68MB）
 ```
 
-### 3. 下载模型权重
-
-模型文件未纳入 Git 仓库（合计约 68MB），首次使用前执行：
+启动 Web 界面：
 
 ```bash
-python3 scripts/download_models.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-会自动下载并校验：
+打开 `http://localhost:8000`：上传视频 → 选择预设或自定义参数 → 实时查看进度 → 在线预览并下载 zip。
 
-| 模型 | 用途 | 大小 |
-|---|---|---|
-| MiDaS v2.1 small | 单目深度估计 | 约 64MB |
-| U2NetP | 主体分割 | 约 4.4MB |
-
-### 4. 导出帧序列
+### 方式三：命令行
 
 ```bash
+# 全功能导出
 python3 scripts/extract_frames.py --input source.mp4 --output my_project
-```
 
-默认全部功能开启，结束后自动打包 zip。
+# 使用预设 + 多进程加速
+python3 scripts/extract_frames.py --input source.mp4 --output my_project \
+  --preset anime --workers 4
 
-多视频批量处理：
-
-```bash
+# 多视频批量
 python3 scripts/extract_frames.py --input a.mp4 b.mp4 c.mp4 --output batch_dir
+
+# 多段视频拼接
+python3 scripts/concat_clips.py clip1.mp4 clip2.mp4 --output merged.mp4
 ```
 
-多段视频拼接：
+也可通过配置文件运行：`--config params.yaml`（或 `.json`）。
 
-```bash
-python3 scripts/concat_clips.py clip1.mp4 clip2.mp4 clip3.mp4 --output merged.mp4
-```
+---
+
+## REST API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/jobs` | multipart 上传视频与参数，创建任务 |
+| GET | `/api/jobs` | 任务列表 |
+| GET | `/api/jobs/{id}` | 任务状态与进度 |
+| GET | `/api/jobs/{id}/events` | SSE 实时进度推送 |
+| GET | `/api/jobs/{id}/dirs` | 输出目录及文件数 |
+| GET | `/api/jobs/{id}/files/{dir}` | 目录内文件列表 |
+| GET | `/api/jobs/{id}/raw/{dir}/{file}` | 原始图片 |
+| GET | `/api/jobs/{id}/download` | 下载结果 zip |
+
+完整交互式文档：服务启动后访问 `http://localhost:8000/docs`。
 
 ---
 
@@ -102,49 +119,30 @@ my_project/
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--fps` | 24 | 抽帧帧率 |
-| `--lineart-bg` | transparent | 线稿底色：transparent / white / both |
+| `--preset` | 无 | anime / realistic / sketch_only / fast |
+| `--lineart-bg` | transparent | transparent / white / both |
 | `--canny-low` / `--canny-high` | 50 / 150 | Canny 双阈值 |
 | `--line-width` | 1 | 线稿线条粗细 |
 | `--min-component` | 30 | 碎点过滤面积（像素） |
 | `--keyframe-threshold` | 18 | 关键帧 pHash 距离阈值（0–64），调大关键帧更少 |
 | `--mask-threshold` | 127 | 主体蒙版阈值，调大更保守 |
 | `--color-levels` | 6 | 自动底色的色块层级数 |
-| `--palette-k` | 8 | 主色卡聚类颜色数 |
+| `--workers` | 1 | 多进程帧池工作数 |
+| `--config` | 无 | JSON/YAML 配置文件 |
 
-功能开关（加参数即关闭）：
-
-```bash
---no-depth         关闭深度图（跳过模型推理，速度最快）
---no-segment       关闭主体分割
---no-cutout        关闭透明抠图
---no-keyframes     关闭关键帧
---no-stabilize     关闭线稿时域稳定
---no-contact-sheet 关闭接触表
---no-palette       关闭主色卡
---no-base-color    关闭自动底色
---no-gif           关闭 GIF
---no-prores        关闭 ProRes MOV
---no-zip           关闭自动打包
-```
-
-示例：
-
-```bash
-python3 scripts/extract_frames.py --input source.mp4 --output proj \
-  --lineart-bg both --line-width 2 --min-component 50
-```
+功能开关（加参数即关闭）：`--no-depth` `--no-segment` `--no-cutout` `--no-keyframes` `--no-stabilize` `--no-contact-sheet` `--no-palette` `--no-base-color` `--no-gif` `--no-prores` `--no-zip`
 
 ---
 
 ## 在其他 AI 平台上使用
 
-本项目是一个标准的 AI Agent Skill，不绑定单一平台，下载后即可迁移：
+本项目是标准的 AI Agent Skill，不绑定单一平台：
 
-- **豆包 / 其他豆包系 AI**：将整个目录放入用户技能目录（`user_skills/`），由 `SKILL.md` 与 `agents/doubao.yaml` 自动注册，对话中直接调用「视频帧序列导出」
-- **千问（通义 Qwen）及其他兼容 OpenAI 协议的 AI**：参考 `agents/openai.yaml` 中的接口定义接入；技能的核心能力全部以独立 Python 脚本提供，任何支持调用本地脚本/工具的 AI Agent 均可直接编排使用
-- **纯命令行使用**：不依赖任何 AI，直接运行 `scripts/` 下的脚本即可完成全部处理
+- **豆包 / 其他豆包系 AI**：将整个目录放入用户技能目录（`user_skills/`），由 `SKILL.md` 与 `agents/doubao.yaml` 自动注册
+- **千问（通义 Qwen）及其他兼容 OpenAI 协议的 AI**：参考 `agents/openai.yaml` 接入；核心能力全部以独立 Python 脚本提供，任何支持调用本地工具的 AI Agent 均可直接编排
+- **纯命令行 / Web / API**：不依赖任何 AI 即可使用
 
-迁移时只需保证：Python 依赖已安装、ffmpeg 可用、已执行 `download_models.py` 拉取模型。
+迁移时保证：Python 依赖已安装、ffmpeg 可用、已执行 `download_models.py`。
 
 ---
 
@@ -158,13 +156,13 @@ python3 scripts/extract_frames.py --input source.mp4 --output proj \
 
 ## 技术栈
 
-Python 3 · OpenCV · NumPy · Pillow · ONNX Runtime（CPU）· ffmpeg/ffprobe · MiDaS · U2NetP
+Python 3 · FastAPI · OpenCV · NumPy · Pillow · ONNX Runtime（CPU/GPU 自动切换）· ffmpeg/ffprobe · MiDaS · U2NetP · Docker
 
 ---
 
 ## 性能参考
 
-360p 下深度与分割合计约 0.6 秒/帧（CPU），千帧级约 10 分钟。建议先用 5 秒小样验证画面与参数，再跑全量。
+360p 下深度与分割合计约 0.6 秒/帧（单进程 CPU），多进程帧池可近线性提速；千帧级约 10 分钟。建议先用少量帧或极速模式验证参数，再跑全量。
 
 ---
 

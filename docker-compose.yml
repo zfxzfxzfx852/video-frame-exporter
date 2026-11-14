@@ -1,0 +1,12 @@
+services:
+  video-frame-exporter:
+    build: .
+    container_name: video-frame-exporter
+    ports:
+      - "8000:8000"
+    volumes:
+      - vfe-data:/data
+    restart: unless-stopped
+
+volumes:
+  vfe-data:
