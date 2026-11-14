@@ -1,0 +1,7 @@
+interface:
+  display_name: "视频帧序列导出"
+  short_description: "一句话生成视频并导出彩色帧与黑白线稿帧序列，可直接导入C4D"
+  default_prompt: "用 $video-frame-exporter 把这句话生成视频，并导出彩色帧和黑白线稿帧："
+
+policy:
+  allow_implicit_invocation: true
