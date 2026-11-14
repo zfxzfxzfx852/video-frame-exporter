@@ -116,6 +116,9 @@ def process_video(video: str, out: str, config: Optional[ExportConfig] = None,
         _run(["ffmpeg", "-y", "-i", video, "-vf", f"fps={a.fps}",
               os.path.join(dirs["color"], "frame_%06d.png")])
     names = sorted(f for f in os.listdir(dirs["color"]) if f.endswith(".png"))
+    if a.trial:
+        names = names[:10]
+        logger.info("参数试跑模式，仅处理前 %s 帧", len(names))
     total = len(names)
 
     # 2. 逐帧处理（串行 / 多进程）

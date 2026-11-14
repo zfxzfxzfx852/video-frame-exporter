@@ -38,6 +38,7 @@ class ExportConfig:
     color_levels: int = 6
     palette_k: int = 8
     depth_invert: bool = False
+    trial: bool = False                       # True=只处理前 10 帧用于参数试跑
     workers: int = 1                          # 1=串行，>1 启用多进程帧池
     # 功能开关
     keyframes: bool = True
